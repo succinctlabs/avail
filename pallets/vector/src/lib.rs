@@ -4,8 +4,9 @@
 use crate::{storage_utils::MessageStatusEnum, verifier::Verifier};
 use avail_base::{MemoryTemporaryStorage, ProvidePostInherent};
 use avail_core::data_proof::{tx_uid, AddressedMessage, Message, MessageType};
-use consensus_core::{apply_finality_update, apply_update, verify_finality_update, verify_update};
+use consensus_core::{apply_finality_update, apply_update, verify_finality_update, verify_update, types::{Bytes32,ByteVector}};
 use codec::Compact;
+use avail_core::header::Header;
 use frame_support::{
 	pallet_prelude::*,
 	traits::{Currency, ExistenceRequirement, UnixTime},
@@ -14,6 +15,7 @@ use frame_support::{
 use sp_core::H256;
 use sp_runtime::SaturatedConversion;
 use sp_std::{vec, vec::Vec};
+use alloy_primitives::B256;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -417,6 +419,7 @@ pub mod pallet {
 			proof: FunctionProof, // probably not needed
 			#[pallet::compact] slot: u64,
 		) -> DispatchResultWithPostInfo {
+			// honestly none of these inputs are needed just read from Storage
 			let sender: [u8; 32] = ensure_signed(origin)?.into();
 			let updater = Updater::<T>::get();
 			// ensure sender is preconfigured
@@ -424,9 +427,18 @@ pub mod pallet {
 
 			let config = ConfigurationStorage::<T>::get();
 			let input_hash = H256(sha2_256(input.as_slice())); // probably not needed
-			let output_hash = H256(sha2_256(output.as_slice())); // probably not needed
+			let output_hash: H256 = H256(sha2_256(output.as_slice())); // probably not needed
 			let (step_function_id, rotate_function_id) = Self::get_function_ids()?;
 
+			let finalized_header = consensus_core::types::Header {
+				slot: 0.into(),
+				proposer_index: 0.into(),
+				parent_root: ByteVector::try_from(vec![0u8; 32]).unwrap(),
+				state_root: ByteVector::try_from(vec![0u8; 32]).unwrap(),
+				body_root: ByteVector::try_from(vec![0u8; 32]).unwrap(),
+			};
+			
+			// verify_update(input_hash, output_hash, proof.to_vec());
 			// verification logic
 			let verifier = Self::get_verifier(function_id, step_function_id, rotate_function_id)?;
 
