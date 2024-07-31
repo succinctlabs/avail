@@ -340,6 +340,13 @@ pub mod pallet {
 		pub _phantom: PhantomData<T>,
 	}
 
+
+
+
+
+	fn get_all_sync_committee_poseidons<T: Config>() -> Vec<U256> {
+		SyncCommitteePoseidons::<T>::iter_values().collect()
+	}
 	#[pallet::genesis_build]
 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
@@ -439,18 +446,35 @@ pub mod pallet {
 				body_root: ByteVector::try_from(vec![0u8; 32]).unwrap(),
 			};
 
+			let current_sync_committee = SyncCommitteePoseidons::<T>::get(0u64);
+			let next_sync_committee = match SyncCommitteePoseidons::<T>::get(1u64) {
+				Ok(value) => Some(value),
+				Err(_) => None,
+			};
+
+			let all = get_all_sync_committee_poseidons::<T>();
+			println!("all: {:?}", all);
+			println!("current_sync_committee: {:?}", current_sync_committee);
+			println!("next_sync_committee: {:?}", next_sync_committee);
 			let store = LightClientStore {
-				 finalized_header: finalized_header,
-				 current_sync_committee: SyncCommittee,
-				 next_sync_committee: Option<SyncCommittee>,
-				 optimistic_header: consensus_core::types::Header,
-				 previous_max_active_participants: u64,
-				 current_max_active_participants: u64,
+				 finalized_header: finalized_header.clone(),
+				 current_sync_committee: current_sync_committee,
+				 next_sync_committee: next_sync_committee,
+				 optimistic_header: finalized_header.clone(),
+				 previous_max_active_participants: 0u64,
+				 current_max_active_participants: 0u64,
 			}
+
+			update: &Update,
+			expected_current_slot: u64,
+			store: &LightClientStore,
+			genesis_root: Bytes32,
+			forks: &Forks,
+			verify_update();
 
 
 			// verify_update(input_hash, output_hash, proof.to_vec());
-			// verification logic
+			// verification logicﬁ
 			let verifier = Self::get_verifier(function_id, step_function_id, rotate_function_id)?;
 
 			let is_success = verifier
