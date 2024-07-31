@@ -4,7 +4,7 @@
 use crate::{storage_utils::MessageStatusEnum, verifier::Verifier};
 use avail_base::{MemoryTemporaryStorage, ProvidePostInherent};
 use avail_core::data_proof::{tx_uid, AddressedMessage, Message, MessageType};
-use consensus_core::{apply_finality_update, apply_update, verify_finality_update, verify_update, types::{Bytes32,ByteVector}};
+use consensus_core::{apply_finality_update, apply_update, verify_finality_update, verify_update, types::{Bytes32,ByteVector, LightClientStore}};
 use codec::Compact;
 use avail_core::header::Header;
 use frame_support::{
@@ -48,6 +48,7 @@ pub type BalanceOf<T> =
 
 #[frame_support::pallet]
 pub mod pallet {
+	use consensus_core::types::SyncCommittee;
 	use ethabi::Token;
 	use ethabi::Token::Uint;
 	use frame_support::dispatch::GetDispatchInfo;
@@ -437,7 +438,17 @@ pub mod pallet {
 				state_root: ByteVector::try_from(vec![0u8; 32]).unwrap(),
 				body_root: ByteVector::try_from(vec![0u8; 32]).unwrap(),
 			};
-			
+
+			let store = LightClientStore {
+				 finalized_header: finalized_header,
+				 current_sync_committee: SyncCommittee,
+				 next_sync_committee: Option<SyncCommittee>,
+				 optimistic_header: consensus_core::types::Header,
+				 previous_max_active_participants: u64,
+				 current_max_active_participants: u64,
+			}
+
+
 			// verify_update(input_hash, output_hash, proof.to_vec());
 			// verification logic
 			let verifier = Self::get_verifier(function_id, step_function_id, rotate_function_id)?;
