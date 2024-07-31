@@ -33,6 +33,8 @@ trie-db.workspace = true
 rlp.workspace = true
 primitive-types.workspace = true
 ethabi.workspace = true
+common.workspace = true
+consensus-core.workspace = true
 
 
 [dev-dependencies]

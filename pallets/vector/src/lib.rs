@@ -4,7 +4,7 @@
 use crate::{storage_utils::MessageStatusEnum, verifier::Verifier};
 use avail_base::{MemoryTemporaryStorage, ProvidePostInherent};
 use avail_core::data_proof::{tx_uid, AddressedMessage, Message, MessageType};
-
+use consensus_core::{apply_finality_update, apply_update, verify_finality_update, verify_update};
 use codec::Compact;
 use frame_support::{
 	pallet_prelude::*,
@@ -412,9 +412,9 @@ pub mod pallet {
 		pub fn fulfill_call(
 			origin: OriginFor<T>,
 			function_id: H256,
-			input: FunctionInput,
-			output: FunctionOutput,
-			proof: FunctionProof,
+			input: FunctionInput,// probably not needed
+			output: FunctionOutput, // probably not needed
+			proof: FunctionProof, // probably not needed
 			#[pallet::compact] slot: u64,
 		) -> DispatchResultWithPostInfo {
 			let sender: [u8; 32] = ensure_signed(origin)?.into();
@@ -423,9 +423,11 @@ pub mod pallet {
 			ensure!(H256(sender) == updater, Error::<T>::UpdaterMisMatch);
 
 			let config = ConfigurationStorage::<T>::get();
-			let input_hash = H256(sha2_256(input.as_slice()));
-			let output_hash = H256(sha2_256(output.as_slice()));
+			let input_hash = H256(sha2_256(input.as_slice())); // probably not needed
+			let output_hash = H256(sha2_256(output.as_slice())); // probably not needed
 			let (step_function_id, rotate_function_id) = Self::get_function_ids()?;
+
+			// verification logic
 			let verifier = Self::get_verifier(function_id, step_function_id, rotate_function_id)?;
 
 			let is_success = verifier
