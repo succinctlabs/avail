@@ -6,7 +6,7 @@ use avail_base::{MemoryTemporaryStorage, ProvidePostInherent};
 use avail_core::data_proof::{tx_uid, AddressedMessage, Message, MessageType};
 use common::config::types::Forks;
 
-use consensus_core::{apply_finality_update, apply_update, verify_finality_update, verify_update, types::{Bytes32, ByteVector, LightClientStore, Update, FinalityUpdate, Forks, ExecutionStateProof}};
+use consensus_core::{apply_finality_update, apply_update, verify_finality_update, verify_update, types::{Bytes32, ByteVector, LightClientStore, Update, FinalityUpdate}};
 use codec::Compact;
 use avail_core::header::Header;
 use frame_support::{
@@ -374,7 +374,7 @@ pub mod pallet {
         pub source_chain_id: u64,
         pub _phantom: PhantomData<T>,
     }
-
+    // fn
     fn get_all_sync_committee_poseidons<T: Config>() -> Vec<U256> {
         SyncCommitteePoseidons::<T>::iter_values().collect()
     }
