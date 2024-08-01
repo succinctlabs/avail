@@ -35,8 +35,8 @@ primitive-types.workspace = true
 ethabi.workspace = true
 common.workspace = true
 consensus-core.workspace = true
-alloy-primitives = "0.7.7"
-
+alloy-primitives.workspace = true
+ssz-rs.workspace = true
 
 [dev-dependencies]
 pallet-balances = { workspace = true, default-features = false, features = ["std"] }

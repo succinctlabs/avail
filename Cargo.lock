@@ -6796,6 +6796,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+ "ssz_rs",
  "trie-db 0.24.0",
 ]
 
