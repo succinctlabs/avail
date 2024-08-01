@@ -28,8 +28,8 @@ kate-recovery = { git = "https://github.com/availproject/avail-core", tag = "nod
 # avail-core = { path = "../avail-core/core", default-features = false, features = [ "runtime"] }
 # kate = { path = "../avail-core/kate/", default-features = false }
 # kate-recovery = { path = "../avail-core/kate/recovery/", default-features = false}
-common = { git = "https://github.com/a16z/helios.git"}
-consensus-core = { git = "https://github.com/a16z/helios.git"}
+common = {path = "../a16z-im-coming-for-you/common"}
+consensus-core = {path = "../a16z-im-coming-for-you/consensus-core"}
 avail-base = { path = "base", default-features = false }
 da-control = { path = "pallets/dactr", default-features = false }
 pallet-mandate = { path = "pallets/mandate", default-features = false }

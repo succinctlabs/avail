@@ -1720,7 +1720,6 @@ dependencies = [
 [[package]]
 name = "common"
 version = "0.5.5"
-source = "git+https://github.com/a16z/helios.git#3099e30a275ea73939f4fb8c9338b8ea2e9f21f6"
 dependencies = [
  "bytes",
  "ethers-core",
@@ -1760,7 +1759,6 @@ checksum = "baf0a07a401f374238ab8e2f11a104d2851bf9ce711ec69804834de8af45c7af"
 [[package]]
 name = "consensus-core"
 version = "0.1.0"
-source = "git+https://github.com/a16z/helios.git#3099e30a275ea73939f4fb8c9338b8ea2e9f21f6"
 dependencies = [
  "bytes",
  "common 0.5.5",

@@ -4,7 +4,9 @@
 use crate::{storage_utils::MessageStatusEnum, verifier::Verifier};
 use avail_base::{MemoryTemporaryStorage, ProvidePostInherent};
 use avail_core::data_proof::{tx_uid, AddressedMessage, Message, MessageType};
-use consensus_core::{apply_finality_update, apply_update, verify_finality_update, verify_update, types::{Bytes32,ByteVector, LightClientStore}};
+use common::config::types::Forks;
+
+use consensus_core::{apply_finality_update, apply_update, verify_finality_update, verify_update, types::{Bytes32,ByteVector, LightClientStore, Update, FinalityUpdate, Forks, ExecutionStateProof}};
 use codec::Compact;
 use avail_core::header::Header;
 use frame_support::{
@@ -192,6 +194,11 @@ pub mod pallet {
 	#[pallet::getter(fn sync_committee_poseidons)]
 	pub type SyncCommitteePoseidons<T> = StorageMap<_, Identity, u64, U256, ValueQuery>;
 
+	/// Maps from a period to the Sha256 commitment for the sync committee.
+	#[pallet::storage]
+	#[pallet::getter(fn sync_committee_hashes)]
+	pub type SyncCommitteeHashes<T> = StorageMap<_, Identity, u64, U256, ValueQuery>;
+
 	/// Storage for a config of finality threshold and slots per period.
 	#[pallet::storage]
 	pub type ConfigurationStorage<T: Config> = StorageValue<_, Configuration, ValueQuery>;
@@ -340,9 +347,26 @@ pub mod pallet {
 		pub _phantom: PhantomData<T>,
 	}
 
+	// TODO: Rename to FunctionInput
+	#[derive(serde::Serialize, serde::Deserialize, Debug)]
+	pub struct FunctionInputs {
+		pub updates: Vec<Update>,
+		pub finality_update: FinalityUpdate,
+		pub expected_current_slot: u64,
+		pub store: LightClientStore,
+		pub genesis_root: Bytes32,
+		pub forks: Forks,
+		pub execution_state_proof: ExecutionStateProof,
+	}
 
-
-
+	#[derive(serde::Serialize, serde::Deserialize, Debug)]
+	pub struct ExecutionStateProof {
+		#[serde(rename = "executionStateRoot")]
+		pub execution_state_root: B256,
+		#[serde(rename = "executionStateBranch")]
+		pub execution_state_branch: Vec<B256>,
+		pub gindex: String,
+	}
 
 	fn get_all_sync_committee_poseidons<T: Config>() -> Vec<U256> {
 		SyncCommitteePoseidons::<T>::iter_values().collect()
@@ -422,10 +446,11 @@ pub mod pallet {
 		pub fn fulfill_call(
 			origin: OriginFor<T>,
 			function_id: H256,
-			input: FunctionInput,// probably not needed
+			input: FunctionInput, // probably not needed
 			output: FunctionOutput, // probably not needed
 			proof: FunctionProof, // probably not needed
 			#[pallet::compact] slot: u64,
+			inputs: FunctionInputs,
 		) -> DispatchResultWithPostInfo {
 			// honestly none of these inputs are needed just read from Storage
 			let sender: [u8; 32] = ensure_signed(origin)?.into();
@@ -438,43 +463,113 @@ pub mod pallet {
 			let output_hash: H256 = H256(sha2_256(output.as_slice())); // probably not needed
 			let (step_function_id, rotate_function_id) = Self::get_function_ids()?;
 
-			let finalized_header = consensus_core::types::Header {
-				slot: 0.into(),
-				proposer_index: 0.into(),
-				parent_root: ByteVector::try_from(vec![0u8; 32]).unwrap(),
-				state_root: ByteVector::try_from(vec![0u8; 32]).unwrap(),
-				body_root: ByteVector::try_from(vec![0u8; 32]).unwrap(),
-			};
+			let FunctionInputs {
+				updates,
+				finality_update,
+				expected_current_slot,
+				store,
+				genesis_root,
+				forks,
+				execution_state_proof,
+			} = inputs;
 
-			let current_sync_committee = SyncCommitteePoseidons::<T>::get(0u64);
-			let next_sync_committee = match SyncCommitteePoseidons::<T>::get(1u64) {
-				Ok(value) => Some(value),
-				Err(_) => None,
-			};
+			let mut is_valid = true;
 
-			let all = get_all_sync_committee_poseidons::<T>();
-			println!("all: {:?}", all);
-			println!("current_sync_committee: {:?}", current_sync_committee);
-			println!("next_sync_committee: {:?}", next_sync_committee);
-			let store = LightClientStore {
-				 finalized_header: finalized_header.clone(),
-				 current_sync_committee: current_sync_committee,
-				 next_sync_committee: next_sync_committee,
-				 optimistic_header: finalized_header.clone(),
-				 previous_max_active_participants: 0u64,
-				 current_max_active_participants: 0u64,
+			let prev_header: B256 = store
+				.finalized_header
+				.hash_tree_root()
+				.unwrap()
+				.as_ref()
+				.try_into()
+				.unwrap();
+			let prev_head = store.finalized_header.slot;
+
+			println!("cycle-tracker-start: verify_and_apply_update");
+
+			// 1. Apply sync committee updates, if any
+			for (index, update) in updates.iter().enumerate() {
+				println!("Processing update {} of {}", index + 1, updates.len());
+				println!("cycle-tracker-start: verify_update");
+				is_valid = is_valid
+					&& verify_update(
+					update,
+					expected_current_slot,
+					&store,
+					genesis_root.clone(),
+					&forks,
+				)
+					.is_ok();
+				println!("cycle-tracker-end: verify_update");
+
+				println!("cycle-tracker-start: apply_update");
+				apply_update(&mut store, update);
+				println!("cycle-tracker-end: apply_update");
 			}
 
-			update: &Update,
-			expected_current_slot: u64,
-			store: &LightClientStore,
-			genesis_root: Bytes32,
-			forks: &Forks,
-			verify_update();
+			// 2. Apply finality update
+			println!("cycle-tracker-start: verify_finality_update");
+			is_valid = is_valid
+				&& verify_finality_update(
+				&finality_update,
+				expected_current_slot,
+				&store,
+				genesis_root.clone(),
+				&forks,
+			)
+				.is_ok();
+			apply_finality_update(&mut store, &finality_update);
+			println!("cycle-tracker-end: verify_finality_update");
+
+			println!("cycle-tracker-end: verify_and_apply_update");
+
+			// 3. Verify execution state root proof
+			println!("cycle-tracker-start: verify_execution_state_proof");
+			let execution_state_branch_nodes: Vec<Node> = execution_state_proof
+				.execution_state_branch
+				.iter()
+				.map(|b| Node::try_from(b.as_ref()).unwrap())
+				.collect();
+
+			is_valid = is_valid
+				&& is_valid_merkle_branch(
+				&Node::try_from(execution_state_proof.execution_state_root.as_ref()).unwrap(),
+				execution_state_branch_nodes.iter(),
+				MERKLE_BRANCH_DEPTH,
+				MERKLE_BRANCH_INDEX,
+				&Node::try_from(store.finalized_header.body_root.as_ref()).unwrap(),
+			);
+			println!("cycle-tracker-end: verify_execution_state_proof");
+
+			assert!(is_valid);
+
+			let header: B256 = store
+				.finalized_header
+				.hash_tree_root()
+				.unwrap()
+				.as_ref()
+				.try_into()
+				.unwrap();
+			let sync_committee_hash: B256 = store
+				.current_sync_committee
+				.hash_tree_root()
+				.unwrap()
+				.as_ref()
+				.try_into()
+				.unwrap();
+			let next_sync_committee_hash: B256 = match &mut store.next_sync_committee {
+				Some(next_sync_committee) => next_sync_committee
+					.hash_tree_root()
+					.unwrap()
+					.as_ref()
+					.try_into()
+					.unwrap(),
+				None => B256::ZERO,
+			};
+			let head = store.finalized_header.slot;
 
 
-			// verify_update(input_hash, output_hash, proof.to_vec());
-			// verification logicﬁ
+
+			// verification logic
 			let verifier = Self::get_verifier(function_id, step_function_id, rotate_function_id)?;
 
 			let is_success = verifier
