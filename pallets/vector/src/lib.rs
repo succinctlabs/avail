@@ -39,6 +39,27 @@ pub type FunctionOutput = BoundedVec<u8, ConstU32<512>>;
 pub type FunctionProof = BoundedVec<u8, ConstU32<1048>>;
 pub type ValidProof = BoundedVec<BoundedVec<u8, ConstU32<2048>>, ConstU32<32>>;
 
+// TODO: Rename to FunctionInput
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+pub struct FunctionInputs {
+    pub updates: Vec<Update>,
+    pub finality_update: FinalityUpdate,
+    pub expected_current_slot: u64,
+    pub store: LightClientStore,
+    pub genesis_root: Bytes32,
+    pub forks: Forks,
+    pub execution_state_proof: ExecutionStateProof,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+pub struct ExecutionStateProof {
+    #[serde(rename = "executionStateRoot")]
+    pub execution_state_root: B256,
+    #[serde(rename = "executionStateBranch")]
+    pub execution_state_branch: Vec<B256>,
+    pub gindex: String,
+}
+
 // Avail asset is supported for now
 pub const SUPPORTED_ASSET_ID: H256 = H256::zero();
 pub const FAILED_SEND_MSG_ID: &[u8] = b"vector:failed_send_msg_txs";
@@ -352,27 +373,6 @@ pub mod pallet {
         pub seconds_per_slot: u64,
         pub source_chain_id: u64,
         pub _phantom: PhantomData<T>,
-    }
-
-    // TODO: Rename to FunctionInput
-    #[derive(serde::Serialize, serde::Deserialize, Debug)]
-    pub struct FunctionInputs {
-        pub updates: Vec<Update>,
-        pub finality_update: FinalityUpdate,
-        pub expected_current_slot: u64,
-        pub store: LightClientStore,
-        pub genesis_root: Bytes32,
-        pub forks: Forks,
-        pub execution_state_proof: ExecutionStateProof,
-    }
-
-    #[derive(serde::Serialize, serde::Deserialize, Debug)]
-    pub struct ExecutionStateProof {
-        #[serde(rename = "executionStateRoot")]
-        pub execution_state_root: B256,
-        #[serde(rename = "executionStateBranch")]
-        pub execution_state_branch: Vec<B256>,
-        pub gindex: String,
     }
 
     fn get_all_sync_committee_poseidons<T: Config>() -> Vec<U256> {
