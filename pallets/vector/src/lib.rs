@@ -1,12 +1,11 @@
-#![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "512"]
 
 use crate::{storage_utils::MessageStatusEnum, verifier::Verifier};
 use avail_base::{MemoryTemporaryStorage, ProvidePostInherent};
 use avail_core::data_proof::{tx_uid, AddressedMessage, Message, MessageType};
 use common::config::types::Forks;
-
-use consensus_core::{apply_finality_update, apply_update, verify_finality_update, verify_update, types::{Bytes32, ByteVector, LightClientStore, Update, FinalityUpdate}};
+use ssz_rs::prelude::*;
+use consensus_core::{apply_finality_update, apply_update, verify_finality_update, verify_update, utils, types::{Bytes32, ByteVector, LightClientStore, Update, FinalityUpdate}};
 use codec::Compact;
 use avail_core::header::Header;
 use frame_support::{
@@ -14,12 +13,23 @@ use frame_support::{
     traits::{Currency, ExistenceRequirement, UnixTime},
     PalletId,
 };
+use std::sync::Arc;
 use sp_core::H256;
 use sp_runtime::SaturatedConversion;
 use sp_std::{vec, vec::Vec};
 use alloy_primitives::B256;
-use ssz_rs::prelude::*;
 
+use ssz_rs::prelude::*;
+use tokio::sync::mpsc::channel;
+use tokio::sync::watch;
+use helios::{
+    config::networks::Network,
+    consensus::{
+        rpc::{nimbus_rpc::NimbusRpc, ConsensusRpc},
+        Inner,
+    },
+    prelude::*,
+};
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 pub mod constants;
@@ -1233,4 +1243,80 @@ pub mod weight_helper {
         }
         (T::WeightInfo::fulfill_call_rotate(), DispatchClass::Normal)
     }
+}
+
+/// Fetch checkpoint from a slot number.
+pub async fn get_checkpoint(slot: u64) -> H256 {
+    let rpc_url = "https://www.lightclientdata.org/";
+    let rpc: NimbusRpc = NimbusRpc::new(&rpc_url);
+
+    let mut block = rpc.get_block(slot).await.unwrap();
+    H256::from_slice(block.hash_tree_root().unwrap().as_ref())
+}
+
+
+#[derive(Deserialize)]
+struct ApiResponse {
+    success: bool,
+    result: ExecutionStateProof,
+}
+
+/// Fetch merkle proof for the execution state root of a specific slot.
+pub async fn get_execution_state_root_proof(
+    slot: u64,
+) -> Result<ExecutionStateProof, Box<dyn std::error::Error>> {
+    let client = reqwest::Client::new();
+
+    let chain_id = std::env::var("SOURCE_CHAIN_ID").unwrap();
+    let url_suffix = match chain_id.as_str() {
+        "11155111" => "-sepolia",  // Sepolia chain ID
+        "17000" => "-holesky",     // Holesky chain ID
+        "1" => "",                 // Mainnet chain ID
+        _ => return Err(format!("Unsupported chain ID: {}", chain_id).into()),
+    };
+
+    let url = format!(
+        "https://beaconapi{}.succinct.xyz/api/beacon/proof/executionStateRoot/{}",
+        url_suffix, slot
+    );
+
+    let response: ApiResponse = client.get(url).send().await?.json().await?;
+
+    if response.success {
+        Ok(response.result)
+    } else {
+        Err("API request was not successful".into())
+    }
+}
+
+/// Setup a client from a checkpoint.
+pub async fn get_client(checkpoint: Vec<u8>) -> Inner<NimbusRpc> {
+    let consensus_rpc = std::env::var("SOURCE_CONSENSUS_RPC_URL").unwrap();
+    let chain_id = std::env::var("SOURCE_CHAIN_ID").unwrap();
+    let network = Network::from_chain_id(chain_id.parse().unwrap()).unwrap();
+    let base_config = network.to_base_config();
+
+    let config = helios::config::Config {
+        consensus_rpc: consensus_rpc.to_string(),
+        execution_rpc: String::new(),
+        chain: base_config.chain,
+        forks: base_config.forks,
+        strict_checkpoint_age: false,
+        ..Default::default()
+    };
+
+    let (block_send, _) = channel(256);
+    let (finalized_block_send, _) = watch::channel(None);
+    let (channel_send, _) = watch::channel(None);
+
+    let mut client = Inner::<NimbusRpc>::new(
+        &consensus_rpc,
+        block_send,
+        finalized_block_send,
+        channel_send,
+        Arc::new(config),
+    );
+
+    client.bootstrap(&checkpoint).await.unwrap();
+    client
 }

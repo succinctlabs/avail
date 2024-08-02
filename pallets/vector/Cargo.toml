@@ -11,7 +11,6 @@ frame-system = { workspace = true, default-features = false }
 avail-core = { workspace = true, default-features = false, features = ["runtime"] }
 avail-base = { workspace = true, default-features = false }
 patricia-merkle-trie = { workspace = true, default-features = false }
-
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
 scale-info.workspace = true
 frame-support = { workspace = true, default-features = false }
@@ -35,13 +34,19 @@ primitive-types.workspace = true
 ethabi.workspace = true
 common.workspace = true
 consensus-core.workspace = true
-helios.workspace = true
 alloy-primitives.workspace = true
 ssz-rs.workspace = true
+tokio.workspace = true
 
-[dev-dependencies]
+
 pallet-balances = { workspace = true, default-features = false, features = ["std"] }
 pallet-timestamp = { workspace = true, default-features = false }
+reqwest = { workspace = true }
+helios.workspace = true
+
+[dev-dependencies]
+reqwest.workspace = true
+helios.workspace = true
 
 [features]
 default = ["std"]

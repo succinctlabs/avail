@@ -30,6 +30,7 @@ kate-recovery = { git = "https://github.com/availproject/avail-core", tag = "nod
 # kate-recovery = { path = "../avail-core/kate/recovery/", default-features = false}
 common = { git = "https://github.com/a16z/helios.git" }
 consensus-core = { git = "https://github.com/a16z/helios.git" }
+reqwest = "0.12.5"
 helios = { git = "https://github.com/a16z/helios.git" }
 avail-base = { path = "base", default-features = false }
 da-control = { path = "pallets/dactr", default-features = false }
@@ -231,12 +232,12 @@ try-runtime-cli = { git = "https://github.com/availproject/polkadot-sdk.git", ta
 substrate-build-script-utils = { git = "https://github.com/availproject/polkadot-sdk.git", tag = "polkadot-1.7.1-patch-7", default-features = false }
 sp-trie = { git = "https://github.com/availproject/polkadot-sdk.git", tag = "polkadot-1.7.1-patch-7", default-features = false }
 sp-state-machine = { git = "https://github.com/availproject/polkadot-sdk.git", tag = "polkadot-1.7.1-patch-7", default-features = false }
-
-
+tokio = "1.38.0"
 sc-block-builder = { git = "https://github.com/availproject/polkadot-sdk.git", tag = "polkadot-1.7.1-patch-7" }
 sc-proposer-metrics = { git = "https://github.com/availproject/polkadot-sdk.git", tag = "polkadot-1.7.1-patch-7" }
 substrate-prometheus-endpoint = { git = "https://github.com/availproject/polkadot-sdk.git", tag = "polkadot-1.7.1-patch-7" }
 # substrate-test-runtime-client = { git = "https://github.com/availproject/polkadot-sdk.git", tag = "polkadot-1.7.1-patch-7" }
+
 
 
 # Patch from forked pallets
@@ -253,13 +254,13 @@ sp-crypto-ec-utils = { git = "https://github.com/availproject/polkadot-sdk.git",
 #
 #[patch."https://github.com/aphoh/blst"]
 #blst = "=0.3.10"
-## Patch bad revm version
-#[patch."https://github.com/bluealloy/revm"]
-#revm = { git = "https://github.com/bluealloy//revm", rev = "23cbac479f616eba5ab11ddfe6d5814b9c492202" }
-#
-## Patch bad revm version
-#[patch."https://github.com/a16z/helios"]
-#revm = { git = "https://github.com/bluealloy//revm", rev = "23cbac479f616eba5ab11ddfe6d5814b9c492202" }
+# Patch bad revm version
+[patch."https://github.com/bluealloy/revm"]
+revm = { git = "https://github.com/bluealloy//revm", rev = "23cbac479f616eba5ab11ddfe6d5814b9c492202" }
+
+# Patch bad revm version
+[patch."https://github.com/a16z/helios"]
+revm = { git = "https://github.com/bluealloy//revm", rev = "23cbac479f616eba5ab11ddfe6d5814b9c492202" }
 
 [patch.crates-io]
 # Other stuff
@@ -369,3 +370,4 @@ zeroize = { opt-level = 3 }
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
+

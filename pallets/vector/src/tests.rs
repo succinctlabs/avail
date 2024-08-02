@@ -1,18 +1,21 @@
-use crate::{
-	mock::{
-        new_test_ext, Balances, Bridge, RuntimeEvent, RuntimeOrigin, System, Test,
-        ROTATE_FUNCTION_ID, ROTATE_VK, STEP_FUNCTION_ID, STEP_VK,
-    },
-	state::Configuration,
-	storage_utils::MessageStatusEnum,
-	Broadcasters, ConfigurationStorage, Error, Event, ExecutionStateRoots, FunctionIds,
-	FunctionInput, FunctionOutput, FunctionProof, Head, Headers, MessageStatus,
-	RotateVerificationKey, SourceChainFrozen, StepVerificationKey, SyncCommitteePoseidons, Updater,
-	ValidProof, WhitelistedDomains, FunctionInputs,
-};
+use crate::{mock::{
+    new_test_ext, Balances, Bridge, RuntimeEvent, RuntimeOrigin, System, Test,
+    ROTATE_FUNCTION_ID, ROTATE_VK, STEP_FUNCTION_ID, STEP_VK,
+}, state::Configuration, storage_utils::MessageStatusEnum, Broadcasters, ConfigurationStorage, Error, Event, ExecutionStateRoots, FunctionIds, FunctionInput, FunctionOutput, FunctionProof, Head, Headers, MessageStatus, RotateVerificationKey, SourceChainFrozen, StepVerificationKey, SyncCommitteePoseidons, Updater, ValidProof, WhitelistedDomains, FunctionInputs, get_checkpoint, get_client, get_execution_state_root_proof};
 use avail_core::data_proof::Message::FungibleToken;
 use avail_core::data_proof::{tx_uid, AddressedMessage, Message};
-
+use consensus_core::verify_update;
+use helios::{
+    config::networks::Network,
+    consensus::{
+        constants,
+        rpc::{nimbus_rpc::NimbusRpc, ConsensusRpc},
+        Inner,
+    },
+    consensus_core::{types::Update, utils},
+    prelude::*,
+};
+use tokio::sync::{mpsc::channel, watch};
 use frame_support::{
     assert_err, assert_ok,
     traits::{fungible::Inspect, DefensiveTruncateFrom},
@@ -23,6 +26,7 @@ use hex_literal::hex;
 use primitive_types::U256;
 use sp_core::{crypto::AccountId32, keccak_256, ByteArray};
 use sp_runtime::{testing::H256, traits::BadOrigin};
+use ssz_rs::prelude::*;
 
 const TEST_SENDER_VEC: [u8; 32] =
     hex!("d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d");
@@ -601,21 +605,43 @@ fn test_execute_message_with_unsupported_domain() {
     });
 }
 
+
 #[test]
-fn test_fulfill_step_call() {
-    new_test_ext().execute_with(|| {
+async fn test_fulfill_step_call() {
+    new_test_ext().execute_with(async || {
         let slot = 7634942;
+        let checkpoint = get_checkpoint(slot).await.into();
+        let period = utils::calc_sync_period(slot);
+        let client = get_client(checkpoint).await;
+        let update = client
+            .rpc
+            .get_updates(period, constants::MAX_REQUEST_LIGHT_CLIENT_UPDATES)
+            .await
+            .unwrap()[0].clone();
+        let finality_update = client.rpc.get_finality_update().await.unwrap().clone();
+        let latest_block = finality_update.finalized_header.slot;
+        let execution_state_root_proof = get_execution_state_root_proof(latest_block.into())
+            .await
+            .unwrap();
+        let expected_current_slot = client.expected_current_slot();
+        let genesis_root = client
+            .config
+            .chain
+            .genesis_root
+            .clone()
+            .try_into()
+            .unwrap();
         Updater::<Test>::set(H256(TEST_SENDER_VEC));
 
-		let inputs = FunctionInputs {
-			updates: vec![],
-			finality_update: FinalityUpdate {},
-			expected_current_slot: 0,
-			store: Default::default(),
-			genesis_root: Default::default(),
-			forks: Default::default(),
-			execution_state_proof: ExecutionStateProof {},
-		}
+        // let inputs = FunctionInputs {
+        //     updates: vec![update],
+        //     finality_update,
+        //     expected_current_slot,
+        //     store: client.store,
+        //     genesis_root,
+        //     forks: client.config.forks.clone(),
+        //     execution_state_proof: execution_state_root_proof,
+        // };
 
         SyncCommitteePoseidons::<Test>::insert(
             931,
@@ -636,6 +662,7 @@ fn test_fulfill_step_call() {
             get_valid_step_output(),
             get_valid_step_proof(),
             slot,
+            inputs,
         );
 
         assert_ok!(result);
